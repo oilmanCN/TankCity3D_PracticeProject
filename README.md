@@ -1,2 +1,171 @@
-# TankCity3D_PracticeProject
-A practice Unity game project
+# TankCity 3D
+
+一个基于 Unity + IMGUI 的 3D 坦克迷宫射击游戏。玩家驾驶坦克穿过由多个区域组成的迷宫，通过消灭敌人、击碎可摧毁障碍、拾取增益，最终抵达终点。
+
+项目使用纯 C# + IMGUI 自绘 UI，不依赖 UGUI/TextMeshPro，是作为学习 Unity 基础架构（单例、MVC、事件、协程、IMGUI）的练习项目。
+
+---
+
+## 玩法简介
+
+- **迷宫分区**：地图由多个独立区域（Zone）组成，区域之间由墙隔开，需要通过击碎障碍或完成区域战斗来打通路线。
+- **区域战斗**：每个区域内布置若干敌人（固定炮塔、巡逻坦克、随机游走坦克、守卫炮台等）。清空当前区域的所有敌人，即可触发下一步事件。
+- **路径选择**：起始区域清空后，会出现左右两个漂浮箭头，玩家碰到哪个就选择走哪条路线，对应的墙会被移除。
+- **可摧毁障碍**：场景中分布着周期性变色的可摧毁方块，被玩家子弹击中若干次后摧毁，并可能掉落奖励。
+- **奖励系统**：
+  - **属性奖励**：攻击、防御、最大生命、当前生命。
+  - **武器奖励**：随机更换当前武器，不同武器有不同的攻击/防御加成。
+- **终点**：清空最后一个区域后，终点图标出现，玩家碰到即通关。
+
+---
+
+## 操作方式
+
+| 操作 | 按键 |
+|------|------|
+| 车体前进 / 后退 | `W` / `S` |
+| 车体左转 / 右转 | `A` / `D` |
+| 炮塔水平旋转 | 鼠标移动 |
+| 炮管俯仰 | 鼠标移动（无右键时） |
+| 相机自由观察 | 按住鼠标右键 + 移动 |
+| 开火 | 鼠标左键 |
+| 暂停菜单 | `ESC` |
+
+---
+
+## 功能特性
+
+### 游戏系统
+- **区域（Zone）系统**：自动检测区域内敌人是否全部清空，触发路径选择或终点生成。
+- **路径选择系统**：基于碰撞触发的左右箭头，选择后动态移除对应墙组。
+- **随机游走 AI**：在出生点范围内随机选点移动，带避障、避让同类、卡住检测、卡死救援。
+- **巡逻 AI**：沿路径点循环移动，带转向减速、卡住跳过、连续跳过传送兜底。
+- **战斗 AI**：自动寻找玩家、视线检测（射线遮挡判断）、炮塔平滑转向、冷却开火。
+- **护盾系统**：敌人可配置护盾值，护盾优先扣减、溢出穿盾扣血、濒破闪烁、被打闪红、破碎隐藏。
+- **伤害系统**：子弹缓存发射时的攻击力和阵营，发射者销毁后仍能正确结算伤害。
+
+### UI 系统（IMGUI 自绘）
+- **自定义控件库**：Button、Slider、Toggle、Label、Texture、Input，全部基于 IMGUI 手写。
+- **面板基类**：泛型单例面板 `BasePanel<T>`，统一管理显示/隐藏。
+- **面板列表**：开始、设置、排行榜、暂停、警告、失败、胜利、主 HUD。
+- **ESC 暂停菜单**：完整的暂停 / 设置 / 退出确认流程，可从暂停菜单进入设置并返回。
+
+### 反馈系统
+- **受伤闪红**：玩家、敌人、障碍物统一使用 `HitFlashEffect`，通过 `MaterialPropertyBlock` 修改颜色，无材质实例开销。
+- **护盾特效**：`ShieldEffectController` 统一管理濒破闪烁、被打闪红、破碎隐藏，颜色优先级明确。
+- **障碍物变色**：可摧毁障碍周期性随机变色（HSV 避开红色系），被打时闪红提示。
+- **头顶血条**：世界坐标 → 屏幕坐标 → GUI 坐标，双条显示（护盾 + 血量），支持平滑过渡、距离缩放、遮挡检测。
+- **准心系统**：从炮口沿炮管方向发射线，投影到屏幕，支持多炮口、命中敌人变色。
+- **死亡演出**：玩家死亡后立即隐藏本体、播放死亡特效，特效播完后弹出失败面板。
+- **相机系统**：第三人称跟随，相机 yaw 绑定炮塔，右键拖动临时偏移，松开自动回正；带碰撞检测防止穿墙。
+
+### 音效系统
+- **AudioSource 池**：10 个 AudioSource 轮询播放，突破单 AudioSource 并发上限。
+- **同种音效节流**：同 clip 0.04s 内只播一次，避免密集战斗糊成一团。
+- **单帧总量保护**：每帧最多播放 4 个音效。
+- **优先级通道**：玩家射击、玩家死亡等关键音效走 `PlaySoundPriority`，不参与节流。
+
+### 数据系统
+- **PlayerPrefs 持久化**：音乐/音效设置、排行榜数据通过 `PlayerPrefsDataMgr` 存取。
+- **MVC 分层**：`GameDataMgr` 作为 Model 层，非 MonoBehaviour 单例，管理所有游戏数据。
+
+---
+
+## 项目结构
+Assets/
+├── Scripts/
+│ ├── UI/
+│ │ ├── BasePanel.cs # 面板泛型单例基类
+│ │ ├── CustomGUIControlBase.cs # IMGUI 控件基类
+│ │ ├── CustomGUIButton.cs
+│ │ ├── CustomGUISlider.cs
+│ │ ├── CustomGUIToggle.cs
+│ │ ├── CustomGUITexture.cs
+│ │ ├── CustomGUILabel.cs
+│ │ ├── CustomGUIInput.cs
+│ │ ├── BeginPanel.cs # 开始菜单
+│ │ ├── MainPanel.cs # 游戏内 HUD
+│ │ ├── SettingPanel.cs # 设置
+│ │ ├── PausePanel.cs # 暂停菜单
+│ │ ├── WarningPanel.cs # 退出确认
+│ │ ├── LosePanel.cs # 失败
+│ │ ├── WinPanel.cs # 胜利
+│ │ └── RankPanel.cs # 排行榜
+│ ├── Tank/
+│ │ ├── TankBase.cs # 坦克抽象基类
+│ │ ├── TankPlayer.cs # 玩家
+│ │ ├── EnemyBase.cs # 敌人基类（护盾/血条）
+│ │ ├── EnemyCombatBase.cs # 战斗型敌人基类
+│ │ ├── EnemyTower.cs # 固定自动炮塔
+│ │ ├── EnemyGuard.cs # 固定守卫
+│ │ ├── EnemyPatrol.cs # 路径点巡逻
+│ │ └── EnemyRandomMove.cs # 随机游走
+│ ├── Weapon/
+│ │ ├── Weapon.cs # 武器（可更换）
+│ │ └── BarrelBullet.cs # 子弹
+│ ├── Effect/
+│ │ ├── HitFlashEffect.cs # 通用闪红
+│ │ ├── ShieldEffectController.cs # 护盾特效
+│ │ ├── AutoDelete.cs # 生命周期管理
+│ │ ├── BlinkBeforeDeath.cs # 生命过半闪烁
+│ │ └── RotateObj.cs # 自转
+│ ├── Zone/
+│ │ ├── ZoneController.cs # 区域清空检测
+│ │ ├── PathChoiceManager.cs # 路径选择管理
+│ │ ├── PathChoiceArrow.cs # 路径箭头
+│ │ ├── ClearWallsManager.cs # 清墙管理器
+│ │ ├── GoalManager.cs # 终点生成
+│ │ └── Goal.cs # 终点图标
+│ ├── Reward/
+│ │ ├── AttributeReward.cs # 属性奖励
+│ │ ├── WeaponReward.cs # 武器奖励
+│ │ └── DestructibleObstacle.cs # 可摧毁障碍
+│ ├── Manager/
+│ │ ├── GameDataMgr.cs # 数据模型（Model）
+│ │ ├── MusicMgr.cs # 背景音乐
+│ │ ├── SoundEffMgr.cs # 音效池
+│ │ ├── CrosshairMgr.cs # 准心
+│ │ └── MinimapCam.cs # 小地图相机
+│ └── Data/
+│ ├── MusicData.cs
+│ └── RankInfo.cs
+└── Scenes/
+├── BeginScene.unity
+└── GameScene.unity
+
+
+---
+
+## 技术要点
+
+- **Unity 版本**：开发使用Unity 2022 LTS 版本（本项目使用 C# 8/9 语法特性）
+- **UI 方案**：纯 IMGUI（`OnGUI`），不依赖 UGUI
+- **数据存储**：PlayerPrefs
+- **输入**：旧版 Input Manager
+- **渲染管线**：Built-in
+
+---
+
+## 设计模式
+
+| 模式 | 应用位置 |
+|------|---------|
+| 单例 | `GameDataMgr`、`MusicMgr`、`SoundEffMgr`、`CrosshairMgr`、所有 Panel |
+| 泛型 | `BasePanel<T>` |
+| 模板方法 | `TankBase.Dead` / `OnDead` |
+| 观察者 | `ZoneController.OnZoneCleared`、`Weapon.GetAimPoints` 事件 |
+| 对象池 | `SoundEffMgr` 的 AudioSource 池 |
+| MVC | `GameDataMgr`（Model）+ Panel（View）+ 事件绑定（Controller） |
+| 策略 | 不同敌人子类重写 `UpdateCombat` / `Patrol` / `MoveToTarget` |
+
+---
+
+## 如何运行
+
+运行文件夹中的主exe即可
+
+---
+
+## MIT License
+
+本项目仅用于学习交流。
